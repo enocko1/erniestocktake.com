@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin — Ernievero Stock App</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<style>
+:root{
+  --bg:#F3F1EC; --surface:#FFFFFF; --border:#DAD5C8; --text:#1C2128; --text-dim:#6B7280;
+  --accent:#B8580F; --accent-ink:#FFFFFF; --danger:#B4232C; --stripe:#F8F6F0;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#171A1F; --surface:#1F242B; --border:#2E353F; --text:#EDEEF0; --text-dim:#8A93A0;
+    --accent:#F5A623; --accent-ink:#171A1F; --danger:#E5555E; --stripe:#242A32; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
+.wrap{max-width:520px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:18px;margin:0 0 4px}
+.sub{color:var(--text-dim);font-size:13px;margin:0 0 24px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px}
+label{display:block;font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:6px}
+input[type=password],input[type=file]{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);
+  border-radius:8px;padding:11px 12px;font-size:16px;margin-bottom:12px}
+.btn{border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px;padding:11px 16px;width:100%;margin-bottom:8px}
+.btn-accent{background:var(--accent);color:var(--accent-ink)}
+.btn-ghost{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.btn-danger{background:var(--danger);color:#fff}
+.hidden{display:none}
+.msg{font-size:13px;margin:0 0 12px}
+.msg.error{color:var(--danger)}
+.msg.ok{color:#2E8B57}
+table{border-collapse:collapse;width:100%;font-size:13px;margin-top:10px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left}
+thead th{color:var(--text-dim);font-size:11px}
+.tablewrap{max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:8px}
+.pill{display:inline-block;font-size:11px;background:var(--stripe);border:1px solid var(--border);
+  border-radius:999px;padding:3px 9px;color:var(--text-dim);margin-bottom:14px}
+.userRow{display:flex;justify-content:space-between;align-items:center;padding:10px 4px;
+  border-bottom:1px solid var(--border);font-size:13px}
+.userRow:last-child{border-bottom:none}
+.userRow .meta{color:var(--text-dim);font-size:12px}
+.viewBtn{border:1px solid var(--border);background:var(--surface);color:var(--text);
+  border-radius:6px;font-size:12px;padding:6px 10px;cursor:pointer}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.tab{padding:8px 14px;font-size:13px;font-weight:600;color:var(--text-dim);cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Ernievero Stock App <span style="color:var(--accent)">— Admin</span></h1>
+  <p class="sub">This page is only for managing the master stock list. Normal users never see this page.</p>
+
+  <!-- Login -->
+  <div class="card" id="loginCard">
+    <div class="msg error hidden" id="loginMsg"></div>
+    <label for="pw">Admin password</label>
+    <input type="password" id="pw" autocomplete="current-password" placeholder="••••••••">
+    <button class="btn btn-accent" id="loginBtn">Log in</button>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="card hidden" id="dashCard">
+    <span class="pill" id="whoami"></span>
+    <div class="msg hidden" id="dashMsg"></div>
+
+    <label for="fileInput">Upload / replace master stock data (CSV or Excel)</label>
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls">
+    <button class="btn btn-accent" id="uploadBtn">Upload &amp; replace master data</button>
+    <button class="btn btn-danger" id="deleteBtn">Delete master data</button>
+    <button class="btn btn-ghost" id="logoutBtn">Log out</button>
+  </div>
+
+  <!-- Tabs: Master list / Entries -->
+  <div class="hidden" id="tabsWrap">
+    <div class="tabs">
+      <div class="tab active" id="tabBtnMaster">Master list</div>
+      <div class="tab" id="tabBtnEntries">Entries</div>
+    </div>
+
+    <div id="tabPanelMaster">
+      <div class="card hidden" id="viewCard">
+        <label style="margin-bottom:10px">Current master stock data</label>
+        <div class="tablewrap">
+          <table><thead><tr id="headRow"></tr></thead><tbody id="bodyRows"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="hidden" id="tabPanelEntries">
+      <div class="card" id="entriesCard">
+        <label style="margin-bottom:10px">User stock-take entries</label>
+        <div class="msg hidden" id="entriesMsg"></div>
+        <div style="display:flex;gap:10px;margin-bottom:14px">
+          <div class="card" style="flex:1;margin:0;padding:12px">
+            <div style="font-size:11px;color:var(--text-dim)">Submitters</div>
+            <div style="font-size:20px;font-weight:700" id="statUsers">–</div>
+          </div>
+          <div class="card" style="flex:1;margin:0;padding:12px">
+            <div style="font-size:11px;color:var(--text-dim)">Items entered</div>
+            <div style="font-size:20px;font-weight:700" id="statItems">–</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost" id="refreshEntriesBtn">Refresh entries</button>
+        <div id="usersList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- One user's entries, shown as an overlay -->
+<div class="hidden" id="entryDetailOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10;padding:20px;overflow:auto">
+  <div class="card" style="max-width:520px;margin:0 auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span class="pill" id="detailWhoami" style="margin:0"></span>
+      <button class="btn btn-ghost" style="width:auto;padding:6px 12px;margin:0" id="detailCloseBtn">Close</button>
+    </div>
+    <div class="tablewrap">
+      <table><thead><tr id="detailHeadRow"></tr></thead><tbody id="detailBodyRows"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+import {
+  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
+import {
+  getFirestore, doc, setDoc, deleteDoc, getDoc, collectionGroup, query, getDocs
+} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+import { firebaseConfig, ADMIN_EMAIL } from "./firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// TEMPORARY DEBUG HOOKS — lets us test Firestore queries directly from the
+// browser DevTools console (e.g. auth.currentUser, db, collectionGroup(db,'entries')).
+// Safe to leave in (these values aren't secret — see firebase-config.js comment),
+// but fine to remove once the permission-denied issue is resolved.
+window.app = app;
+window.auth = auth;
+window.db = db;
+window.collectionGroup = collectionGroup;
+window.query = query;
+window.getDocs = getDocs;
+const masterDocRef = doc(db, 'masterStock', 'current');
+
+const $ = s => document.querySelector(s);
+const loginCard = $('#loginCard'), dashCard = $('#dashCard'), viewCard = $('#viewCard'), tabsWrap = $('#tabsWrap');
+const loginMsg = $('#loginMsg'), dashMsg = $('#dashMsg');
+
+function showMsg(el, text, type){
+  el.textContent = text; el.className = 'msg' + (type ? ' ' + type : '');
+  el.classList.remove('hidden');
+}
+
+onAuthStateChanged(auth, user => {
+  console.log('DEBUG auth state:', user ? {uid:user.uid, email:user.email, isAnonymous:user.isAnonymous} : null);
+  // Only treat this as an admin session if it's a real (non-anonymous) account
+  // signed in with the admin email. A leftover anonymous session from the
+  // normal app (index.html) must NOT show the dashboard.
+  if (user && !user.isAnonymous && user.email === ADMIN_EMAIL) {
+    loginCard.classList.add('hidden');
+    dashCard.classList.remove('hidden');
+    $('#whoami').textContent = 'Signed in as admin';
+    tabsWrap.classList.remove('hidden');
+    loadMasterView();
+    loadAllEntries();
+  } else {
+    loginCard.classList.remove('hidden');
+    dashCard.classList.add('hidden');
+    viewCard.classList.add('hidden');
+    tabsWrap.classList.add('hidden');
+    $('#entryDetailOverlay').classList.add('hidden');
+    // If we picked up a stray anonymous session, sign it out so the
+    // login form's email/password sign-in can proceed cleanly.
+    if (user && user.isAnonymous) signOut(auth);
+  }
+});
+
+$('#loginBtn').addEventListener('click', async () => {
+  const pw = $('#pw').value;
+  if(!pw){ showMsg(loginMsg, 'Enter the admin password.', 'error'); return; }
+  loginMsg.classList.add('hidden');
+  try{
+    await signInWithEmailAndPassword(auth, ADMIN_EMAIL, pw);
+    $('#pw').value = '';
+  }catch(err){
+    console.error(err);
+    showMsg(loginMsg, 'Incorrect password, or admin account not set up yet.', 'error');
+  }
+});
+$('#pw').addEventListener('keydown', e => { if(e.key === 'Enter') $('#loginBtn').click(); });
+
+$('#logoutBtn').addEventListener('click', () => signOut(auth));
+
+/* ---------- Tabs: Master list / Entries ---------- */
+const tabBtnMaster = $('#tabBtnMaster'), tabBtnEntries = $('#tabBtnEntries');
+const tabPanelMaster = $('#tabPanelMaster'), tabPanelEntries = $('#tabPanelEntries');
+function selectTab(which){
+  const onMaster = which === 'master';
+  tabBtnMaster.classList.toggle('active', onMaster);
+  tabBtnEntries.classList.toggle('active', !onMaster);
+  tabPanelMaster.classList.toggle('hidden', !onMaster);
+  tabPanelEntries.classList.toggle('hidden', onMaster);
+}
+tabBtnMaster.addEventListener('click', () => selectTab('master'));
+tabBtnEntries.addEventListener('click', () => selectTab('entries'));
+
+/* ---------- Parse CSV / Excel into an array of row-objects, keeping original columns ---------- */
+function splitCsvLine(line){
+  const out = []; let cur=''; let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const ch = line[i];
+    if(inQ){
+      if(ch==='"' && line[i+1]==='"'){ cur+='"'; i++; }
+      else if(ch==='"'){ inQ=false; }
+      else cur+=ch;
+    } else {
+      if(ch==='"') inQ=true;
+      else if(ch===','){ out.push(cur); cur=''; }
+      else cur+=ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+function rowsFromAoa(aoa){
+  if(!aoa || !aoa.length) return [];
+  let headerIdx = 0, bestScore = -1;
+  const scanLimit = Math.min(aoa.length, 15);
+  for(let r=0;r<scanLimit;r++){
+    const row = aoa[r]||[];
+    const nonEmpty = row.filter(c=>String(c).trim().length>0).length;
+    if(nonEmpty>bestScore){ bestScore=nonEmpty; headerIdx=r; }
+  }
+  const headers = (aoa[headerIdx]||[]).map(h=>String(h).trim());
+  const objs = [];
+  for(let r=headerIdx+1;r<aoa.length;r++){
+    const row = aoa[r]||[];
+    if(row.every(c=>String(c).trim()==='')) continue;
+    const obj = {};
+    headers.forEach((h,i)=>{ if(h) obj[h]=row[i]; });
+    objs.push(obj);
+  }
+  return objs;
+}
+async function parseFile(file){
+  const name = file.name.toLowerCase();
+  let aoa;
+  if(name.endsWith('.csv')){
+    const text = await file.text();
+    aoa = text.split(/\r?\n/).filter(l=>l.trim().length).map(splitCsvLine);
+  } else {
+    if(typeof XLSX === 'undefined') throw new Error('Excel library not loaded — try CSV, or check your connection.');
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    aoa = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+  }
+  return rowsFromAoa(aoa);
+}
+
+$('#uploadBtn').addEventListener('click', async () => {
+  const file = $('#fileInput').files[0];
+  if(!file){ showMsg(dashMsg, 'Choose a CSV or Excel file first.', 'error'); return; }
+  try{
+    const rows = await parseFile(file);
+    if(!rows.length){ showMsg(dashMsg, 'No rows found in that file.', 'error'); return; }
+    await setDoc(masterDocRef, { rows, fileName: file.name, updatedAt: Date.now() });
+    showMsg(dashMsg, `Uploaded ${rows.length} row(s). All users now see this data.`, 'ok');
+    $('#fileInput').value = '';
+    loadMasterView();
+  }catch(err){
+    console.error(err);
+    showMsg(dashMsg, 'Upload failed: ' + (err.message || 'check your connection and try again.'), 'error');
+  }
+});
+
+$('#deleteBtn').addEventListener('click', async () => {
+  if(!confirm('Delete the master stock data? Normal users will no longer see it.')) return;
+  try{
+    await deleteDoc(masterDocRef);
+    showMsg(dashMsg, 'Master data deleted.', 'ok');
+    loadMasterView();
+  }catch(err){
+    console.error(err);
+    showMsg(dashMsg, 'Delete failed — check your connection.', 'error');
+  }
+});
+
+async function loadMasterView(){
+  const headRow = $('#headRow'), bodyRows = $('#bodyRows');
+  try{
+    const snap = await getDoc(masterDocRef);
+    if(!snap.exists() || !(snap.data().rows||[]).length){
+      viewCard.classList.add('hidden');
+      return;
+    }
+    const rows = snap.data().rows;
+    viewCard.classList.remove('hidden');
+    const cols = Object.keys(rows[0]);
+    headRow.innerHTML = cols.map(c=>`<th>${esc(c)}</th>`).join('');
+    bodyRows.innerHTML = rows.map(r=>
+      `<tr>${cols.map(c=>`<td>${esc(String(r[c]==null?'':r[c]))}</td>`).join('')}</tr>`
+    ).join('');
+  }catch(err){
+    console.error(err);
+    showMsg(dashMsg, 'Could not load current master data.', 'error');
+  }
+}
+function esc(s){ return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------- User entries (read-only review) ---------- */
+let entriesByUser = {}; // uid -> [entry, ...]
+
+async function loadAllEntries(){
+  const entriesMsg = $('#entriesMsg'), usersList = $('#usersList');
+  $('#refreshEntriesBtn').disabled = true;
+  usersList.innerHTML = '<p style="color:var(--text-dim);font-size:13px">Loading…</p>';
+  entriesMsg.classList.add('hidden');
+  try{
+    // Force a fresh ID token before querying, in case the cached one predates
+    // the current rules or there's clock skew — cheap to do, rules out a
+    // whole class of stale-auth issues.
+    if(auth.currentUser) await auth.currentUser.getIdToken(true);
+    console.log('DEBUG loadAllEntries as', {
+      uid: auth.currentUser?.uid,
+      project: app.options.projectId,
+      dbId: db._databaseId ? db._databaseId.database : 'unknown'
+    });
+    const snap = await getDocs(query(collectionGroup(db, 'entries')));
+    entriesByUser = {};
+    snap.forEach(d => {
+      const uid = d.ref.parent.parent.id; // .../users/{uid}/entries/{entryId}
+      (entriesByUser[uid] ||= []).push({ id: d.id, ...d.data() });
+    });
+    const uids = Object.keys(entriesByUser);
+    $('#statUsers').textContent = uids.length;
+    $('#statItems').textContent = snap.size;
+    if(!uids.length){
+      usersList.innerHTML = '<p style="color:var(--text-dim);font-size:13px">No entries submitted yet.</p>';
+    } else {
+      usersList.innerHTML = uids.map(uid => {
+        const rows = entriesByUser[uid];
+        const latest = rows.reduce((max,r)=> Math.max(max, r.updatedAt||r.createdAt||0), 0);
+        const when = latest ? new Date(latest).toLocaleString() : 'unknown time';
+        return `<div class="userRow">
+          <div>
+            <div>${esc(uid.slice(0,6))}…${esc(uid.slice(-4))}</div>
+            <div class="meta">${rows.length} item(s) · updated ${esc(when)}</div>
+          </div>
+          <button class="viewBtn" data-uid="${esc(uid)}">View</button>
+        </div>`;
+      }).join('');
+      usersList.querySelectorAll('.viewBtn').forEach(btn=>{
+        btn.addEventListener('click', () => showUserDetail(btn.dataset.uid));
+      });
+    }
+  }catch(err){
+    console.error('Load entries error', err.code, err.message, {uid: auth.currentUser?.uid, project: app.options.projectId});
+    usersList.innerHTML = '';
+    showMsg(entriesMsg, 'Could not load entries — check your connection.', 'error');
+  }finally{
+    $('#refreshEntriesBtn').disabled = false;
+  }
+}
+$('#refreshEntriesBtn').addEventListener('click', loadAllEntries);
+
+function showUserDetail(uid){
+  const rows = entriesByUser[uid] || [];
+  $('#detailWhoami').textContent = `${uid.slice(0,6)}…${uid.slice(-4)} — ${rows.length} item(s)`;
+  const headRow = $('#detailHeadRow'), bodyRows = $('#detailBodyRows');
+  if(!rows.length){
+    headRow.innerHTML = '';
+    bodyRows.innerHTML = '<tr><td style="padding:12px;color:var(--text-dim)">No entries.</td></tr>';
+  } else {
+    // Union of all keys across this user's entries, minus internal fields.
+    const skip = new Set(['id']);
+    const cols = [...new Set(rows.flatMap(r=>Object.keys(r)))].filter(c=>!skip.has(c));
+    headRow.innerHTML = cols.map(c=>`<th>${esc(c)}</th>`).join('');
+    bodyRows.innerHTML = rows.map(r=>
+      `<tr>${cols.map(c=>`<td>${esc(String(r[c]==null?'':r[c]))}</td>`).join('')}</tr>`
+    ).join('');
+  }
+  $('#entryDetailOverlay').classList.remove('hidden');
+}
+$('#detailCloseBtn').addEventListener('click', ()=> $('#entryDetailOverlay').classList.add('hidden'));
+</script>
+</body>
+</html>
