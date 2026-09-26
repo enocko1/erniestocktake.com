@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin — Ernievero Stock App</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<style>
+:root{
+  --bg:#F3F1EC; --surface:#FFFFFF; --border:#DAD5C8; --text:#1C2128; --text-dim:#6B7280;
+  --accent:#B8580F; --accent-ink:#FFFFFF; --danger:#B4232C; --stripe:#F8F6F0;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#171A1F; --surface:#1F242B; --border:#2E353F; --text:#EDEEF0; --text-dim:#8A93A0;
+    --accent:#F5A623; --accent-ink:#171A1F; --danger:#E5555E; --stripe:#242A32; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
+.wrap{max-width:520px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:18px;margin:0 0 4px}
+.sub{color:var(--text-dim);font-size:13px;margin:0 0 24px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px}
+label{display:block;font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:6px}
+input[type=password],input[type=file]{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);
+  border-radius:8px;padding:11px 12px;font-size:16px;margin-bottom:12px}
+.btn{border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px;padding:11px 16px;width:100%;margin-bottom:8px}
+.btn-accent{background:var(--accent);color:var(--accent-ink)}
+.btn-ghost{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.btn-danger{background:var(--danger);color:#fff}
+.hidden{display:none}
+.msg{font-size:13px;margin:0 0 12px}
+.msg.error{color:var(--danger)}
+.msg.ok{color:#2E8B57}
+table{border-collapse:collapse;width:100%;font-size:13px;margin-top:10px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left}
+thead th{color:var(--text-dim);font-size:11px}
+.tablewrap{max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:8px}
+.pill{display:inline-block;font-size:11px;background:var(--stripe);border:1px solid var(--border);
+  border-radius:999px;padding:3px 9px;color:var(--text-dim);margin-bottom:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Ernievero Stock App <span style="color:var(--accent)">— Admin</span></h1>
+  <p class="sub">This page is only for managing the master stock list. Normal users never see this page.</p>
+
+  <!-- Login -->
+  <div class="card" id="loginCard">
+    <div class="msg error hidden" id="loginMsg"></div>
+    <label for="pw">Admin password</label>
+    <input type="password" id="pw" autocomplete="current-password" placeholder="••••••••">
+    <button class="btn btn-accent" id="loginBtn">Log in</button>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="card hidden" id="dashCard">
+    <span class="pill" id="whoami"></span>
+    <div class="msg hidden" id="dashMsg"></div>
+
+    <label for="fileInput">Upload / replace master stock data (CSV or Excel)</label>
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls">
+    <button class="btn btn-accent" id="uploadBtn">Upload &amp; replace master data</button>
+    <button class="btn btn-danger" id="deleteBtn">Delete master data</button>
+    <button class="btn btn-ghost" id="logoutBtn">Log out</button>
+  </div>
+
+  <div class="card hidden" id="viewCard">
+    <label style="margin-bottom:10px">Current master stock data</label>
+    <div class="tablewrap">
+      <table><thead><tr id="headRow"></tr></thead><tbody id="bodyRows"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+import {
+  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
+import {
+  getFirestore, doc, setDoc, deleteDoc, getDoc
+} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+import { firebaseConfig, ADMIN_EMAIL } from "./firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const masterDocRef = doc(db, 'masterStock', 'current');
+
+const $ = s => document.querySelector(s);
+const loginCard = $('#loginCard'), dashCard = $('#dashCard'), viewCard = $('#viewCard');
+const loginMsg = $('#loginMsg'), dashMsg = $('#dashMsg');
+
+function showMsg(el, text, type){
+  el.textContent = text; el.className = 'msg' + (type ? ' ' + type : '');
+  el.classList.remove('hidden');
+}
+
+onAuthStateChanged(auth, user => {
+  if (user) {
+    loginCard.classList.add('hidden');
+    dashCard.classList.remove('hidden');
+    $('#whoami').textContent = 'Signed in as admin';
+    console.log('DEBUG signed-in UID:', user.uid, '| email:', user.email, '| isAnonymous:', user.isAnonymous);
+    loadMasterView();
+  } else {
+    loginCard.classList.remove('hidden');
+    dashCard.classList.add('hidden');
+    viewCard.classList.add('hidden');
+  }
+});
+
+$('#loginBtn').addEventListener('click', async () => {
+  const pw = $('#pw').value;
+  if(!pw){ showMsg(loginMsg, 'Enter the admin password.', 'error'); return; }
+  loginMsg.classList.add('hidden');
+  try{
+    await signInWithEmailAndPassword(auth, ADMIN_EMAIL, pw);
+    $('#pw').value = '';
+  }catch(err){
+    console.error(err);
+    showMsg(loginMsg, 'Incorrect password, or admin account not set up yet.', 'error');
+  }
+});
+$('#pw').addEventListener('keydown', e => { if(e.key === 'Enter') $('#loginBtn').click(); });
+
+$('#logoutBtn').addEventListener('click', () => signOut(auth));
+
+/* ---------- Parse CSV / Excel into an array of row-objects, keeping original columns ---------- */
+function splitCsvLine(line){
+  const out = []; let cur=''; let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const ch = line[i];
+    if(inQ){
+      if(ch==='"' && line[i+1]==='"'){ cur+='"'; i++; }
+      else if(ch==='"'){ inQ=false; }
+      else cur+=ch;
+    } else {
+      if(ch==='"') inQ=true;
+      else if(ch===','){ out.push(cur); cur=''; }
+      else cur+=ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+function rowsFromAoa(aoa){
+  if(!aoa || !aoa.length) return [];
+  let headerIdx = 0, bestScore = -1;
+  const scanLimit = Math.min(aoa.length, 15);
+  for(let r=0;r<scanLimit;r++){
+    const row = aoa[r]||[];
+    const nonEmpty = row.filter(c=>String(c).trim().length>0).length;
+    if(nonEmpty>bestScore){ bestScore=nonEmpty; headerIdx=r; }
+  }
+  const headers = (aoa[headerIdx]||[]).map(h=>String(h).trim());
+  const objs = [];
+  for(let r=headerIdx+1;r<aoa.length;r++){
+    const row = aoa[r]||[];
+    if(row.every(c=>String(c).trim()==='')) continue;
+    const obj = {};
+    headers.forEach((h,i)=>{ if(h) obj[h]=row[i]; });
+    objs.push(obj);
+  }
+  return objs;
+}
+async function parseFile(file){
+  const name = file.name.toLowerCase();
+  let aoa;
+  if(name.endsWith('.csv')){
+    const text = await file.text();
+    aoa = text.split(/\r?\n/).filter(l=>l.trim().length).map(splitCsvLine);
+  } else {
+    if(typeof XLSX === 'undefined') throw new Error('Excel library not loaded — try CSV, or check your connection.');
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    aoa = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+  }
+  return rowsFromAoa(aoa);
+}
+
+$('#uploadBtn').addEventListener('click', async () => {
+  const file = $('#fileInput').files[0];
+  if(!file){ showMsg(dashMsg, 'Choose a CSV or Excel file first.', 'error'); return; }
+  try{
+    const rows = await parseFile(file);
+    if(!rows.length){ showMsg(dashMsg, 'No rows found in that file.', 'error'); return; }
+    await setDoc(masterDocRef, { rows, fileName: file.name, updatedAt: Date.now() });
+    showMsg(dashMsg, `Uploaded ${rows.length} row(s). All users now see this data.`, 'ok');
+    $('#fileInput').value = '';
+    loadMasterView();
+  }catch(err){
+    console.error(err);
+    showMsg(dashMsg, 'Upload failed: ' + (err.message || 'check your connection and try again.'), 'error');
+  }
+});
+
+$('#deleteBtn').addEventListener('click', async () => {
+  if(!confirm('Delete the master stock data? Normal users will no longer see it.')) return;
+  try{
+    await deleteDoc(masterDocRef);
+    showMsg(dashMsg, 'Master data deleted.', 'ok');
+    loadMasterView();
+  }catch(err){
+    console.error(err);
+    showMsg(dashMsg, 'Delete failed — check your connection.', 'error');
+  }
+});
+
+async function loadMasterView(){
+  const headRow = $('#headRow'), bodyRows = $('#bodyRows');
+  try{
+    const snap = await getDoc(masterDocRef);
+    if(!snap.exists() || !(snap.data().rows||[]).length){
+      viewCard.classList.add('hidden');
+      return;
+    }
+    const rows = snap.data().rows;
+    viewCard.classList.remove('hidden');
+    const cols = Object.keys(rows[0]);
+    headRow.innerHTML = cols.map(c=>`<th>${esc(c)}</th>`).join('');
+    bodyRows.innerHTML = rows.map(r=>
+      `<tr>${cols.map(c=>`<td>${esc(String(r[c]==null?'':r[c]))}</td>`).join('')}</tr>`
+    ).join('');
+  }catch(err){
+    console.error(err);
+    showMsg(dashMsg, 'Could not load current master data.', 'error');
+  }
+}
+function esc(s){ return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+</script>
+</body>
+</html>
