@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin — Ernievero Stock App</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<style>
+:root{
+  --bg:#F3F1EC; --surface:#FFFFFF; --border:#DAD5C8; --text:#1C2128; --text-dim:#6B7280;
+  --accent:#B8580F; --accent-ink:#FFFFFF; --danger:#B4232C; --stripe:#F8F6F0;
+  --ok:#1E7B4B; --over:#D97706; --under:#B4232C;
+  --mono:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#171A1F; --surface:#1F242B; --border:#2E353F; --text:#EDEEF0; --text-dim:#8A93A0;
+    --accent:#F5A623; --accent-ink:#171A1F; --danger:#E5555E; --stripe:#242A32;
+    --ok:#3FB77B; --over:#F59E0B; --under:#EF6B73; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 60px}
+.wrap.narrow{max-width:520px}
+h1{font-size:18px;margin:0 0 4px}
+.sub{color:var(--text-dim);font-size:13px;margin:0 0 20px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+label{display:block;font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:6px}
+input[type=password],input[type=file],input[type=search],input[type=text],select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);
+  border-radius:8px;padding:10px 12px;font-size:15px}
+input[type=password]{margin-bottom:12px}
+.btn{border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px;padding:10px 16px;white-space:nowrap}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.block{width:100%;margin-bottom:8px}
+.btn-accent{background:var(--accent);color:var(--accent-ink)}
+.btn-ghost{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-sm{padding:6px 10px;font-size:12px;border-radius:6px}
+.hidden{display:none!important}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row > *{flex:1 1 160px}
+.row > .fit{flex:0 0 auto}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
+.overlay.hidden{display:none}
+.sheet{background:var(--surface);width:100%;max-width:480px;border-radius:16px;padding:18px;max-height:92vh;overflow:auto}
+.sheet.wide{max-width:900px}
+.sheet h2{margin:0 0 12px;font-size:17px}
+.sheet-actions{display:flex;gap:10px;margin-top:10px}
+.sheet-actions .btn{flex:1}
+.confirm-sheet{max-width:380px;text-align:center}
+.confirm-sheet p{font-size:14px;color:var(--text-dim);margin:0 0 14px;line-height:1.4;white-space:pre-line}
+.msg{font-size:13px;margin:0 0 12px;padding:10px 12px;border-radius:8px;border:1px solid var(--border)}
+.msg.error{color:var(--danger);border-color:var(--danger);background:color-mix(in srgb,var(--danger) 8%,transparent)}
+.msg.ok{color:var(--ok);border-color:var(--ok);background:color-mix(in srgb,var(--ok) 8%,transparent)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+thead th{color:var(--text-dim);font-size:11px;position:sticky;top:0;background:var(--surface);z-index:2}
+th.num,td.num{text-align:right}
+.mono{font-family:var(--mono)}
+.tablewrap{max-height:60vh;overflow:auto;border:1px solid var(--border);border-radius:8px}
+.pill{display:inline-block;font-size:11px;background:var(--stripe);border:1px solid var(--border);border-radius:999px;padding:3px 9px;color:var(--text-dim)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;overflow-x:auto}
+.tab{padding:8px 14px;font-size:13px;font-weight:600;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px}
+.stat .k{font-size:11px;color:var(--text-dim);line-height:1.3}
+.stat .v{font-size:22px;font-weight:700;font-family:var(--mono);margin-top:4px}
+.stat.over .v{color:var(--over)} .stat.under .v{color:var(--under)} .stat.ok .v{color:var(--ok)}
+.st-correct{--c:var(--ok)} .st-over{--c:var(--over)} .st-under{--c:var(--under)} .st-uncounted{--c:var(--text-dim)}
+.chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;
+  color:var(--c);background:color-mix(in srgb,var(--c) 14%,transparent);border:1px solid color-mix(in srgb,var(--c) 40%,transparent)}
+.var{font-family:var(--mono);font-weight:700;color:var(--c)}
+tbody tr td:first-child{box-shadow:inset 3px 0 0 var(--c,transparent)}
+.note{font-size:12px;color:var(--text-dim);margin:6px 0 12px;line-height:1.45}
+.warn{color:var(--over);font-weight:600}
+.list{font-size:12px;max-height:150px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin:6px 0 10px;background:var(--bg)}
+.list div{padding:2px 0}
+.conflict{color:var(--over);font-weight:600;font-size:11px}
+.small{font-size:11px;color:var(--text-dim)}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div class="wrap narrow" id="loginWrap">
+  <h1>Ernievero Stock App <span style="color:var(--accent)">— Admin</span></h1>
+  <p class="sub">This page is only for the administrator. Normal users never see this page.</p>
+  <div class="card">
+    <div class="msg error hidden" id="loginMsg"></div>
+    <label for="pw">Admin password</label>
+    <input type="password" id="pw" autocomplete="current-password" placeholder="••••••••">
+    <button class="btn btn-accent block" id="loginBtn">Log in</button>
+  </div>
+</div>
+
+<!-- ============ DASHBOARD ============ -->
+<div class="wrap hidden" id="dashWrap">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    <div>
+      <h1>Ernievero Stock App <span style="color:var(--accent)">— Admin</span></h1>
+      <span class="pill" id="whoami">Signed in as admin</span> <span class="pill" id="loadedAt"></span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" id="refreshBtn">&#8635; Refresh</button>
+      <button class="btn btn-ghost" id="logoutBtn">Log out</button>
+    </div>
+  </div>
+
+  <div class="msg hidden" id="dashMsg"></div>
+
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="overview">Overview</div>
+    <div class="tab" data-tab="products">Products</div>
+    <div class="tab" data-tab="users">Users</div>
+    <div class="tab" data-tab="master">Master data</div>
+  </div>
+
+  <!-- Shared view controls for Overview + Products -->
+  <div class="card" id="viewBar">
+    <div class="row">
+      <div><label for="viewUser">View</label><select id="viewUser"></select></div>
+      <div id="basisWrap"><label for="basis">When several users counted the same product, use</label>
+        <select id="basis"><option value="latest">The most recent count</option><option value="highest">The highest count</option><option value="lowest">The lowest count</option></select></div>
+    </div>
+    <div class="note" id="viewNote" style="margin-bottom:0"></div>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div id="panel-overview">
+    <div class="stats" id="statsGrid"></div>
+    <div class="card">
+      <div class="row">
+        <button class="btn btn-accent fit" id="expOverallX">Export overall report (Excel)</button>
+        <button class="btn btn-ghost fit" id="expOverallC">Export product-by-product (CSV)</button>
+      </div>
+      <div class="note" style="margin-top:10px">Counts are never added together across users: each product contributes <b>one</b> count (chosen by the setting above) so stock is not double-counted. Every user's own variance is shown separately under Users and in the Excel report ("Counts by user").</div>
+    </div>
+  </div>
+
+  <!-- PRODUCTS -->
+  <div class="hidden" id="panel-products">
+    <div class="card">
+      <div class="row">
+        <div><label for="pSearch">Search product</label><input type="search" id="pSearch" placeholder="Search item details…"></div>
+        <div><label for="pStatus">Status</label>
+          <select id="pStatus"><option value="all">All products</option><option value="uncounted">Not counted</option><option value="correct">Correct</option>
+            <option value="over">Overcount</option><option value="under">Undercount</option><option value="issues">Overcount + Undercount</option><option value="conflict">Users disagree</option></select></div>
+        <div class="fit"><button class="btn btn-ghost" id="expProdC">Export this list (CSV)</button></div>
+      </div>
+      <div class="small" id="pCount" style="margin-top:8px"></div>
+    </div>
+    <div class="tablewrap" style="max-height:68vh"><table><thead><tr>
+      <th>Item details</th><th class="num">Expected (System)</th><th class="num">Counted</th><th class="num">Variance<br>(Cnt − Exp)</th><th>Status</th><th>Counts by user</th>
+    </tr></thead><tbody id="pBody"></tbody></table></div>
+  </div>
+
+  <!-- USERS -->
+  <div class="hidden" id="panel-users">
+    <div class="card">
+      <div class="row">
+        <div class="note" style="margin:0">Each user's figures below use only that user's own counts.</div>
+        <div class="fit"><button class="btn btn-danger" id="resetAllBtn">Reset ALL users' entries…</button></div>
+      </div>
+    </div>
+    <div class="tablewrap"><table><thead><tr>
+      <th>User</th><th class="num">Counted</th><th class="num">Not counted</th><th class="num">Correct</th><th class="num">Over</th><th class="num">Under</th>
+      <th class="num">Total counted</th><th class="num">Net variance</th><th>Last saved</th><th></th>
+    </tr></thead><tbody id="uBody"></tbody></table></div>
+  </div>
+
+  <!-- MASTER -->
+  <div class="hidden" id="panel-master">
+    <div class="card">
+      <label for="fileInput">Upload / replace master stock list (Excel or CSV)</label>
+      <input type="file" id="fileInput" accept=".csv,.xlsx,.xls">
+      <div class="note">The file must have an <b>ITEM DETAILS</b> column (product name) and a <b>SYSTEM</b> column (expected quantity). Title rows and blank rows above the header are skipped automatically. TOTAL and DIFF columns are ignored. You will see a preview before anything is replaced.</div>
+      <div class="row">
+        <button class="btn btn-accent fit" id="uploadBtn">Check file &amp; preview</button>
+        <button class="btn btn-danger fit" id="deleteBtn">Delete master data</button>
+      </div>
+    </div>
+    <div class="card hidden" id="masterCard">
+      <div id="masterInfo" class="note" style="margin-top:0"></div>
+      <input type="search" id="mSearch" placeholder="Search master list…" style="margin-bottom:10px">
+      <div class="tablewrap"><table><thead><tr><th>Item details</th><th class="num">Expected (System)</th></tr></thead><tbody id="mBody"></tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ OVERLAYS ============ -->
+<div class="overlay hidden" id="confirmOverlay" style="z-index:100">
+  <div class="sheet confirm-sheet">
+    <h2 id="confirmTitle">Are you sure?</h2>
+    <p id="confirmMsg"></p>
+    <input type="text" id="confirmType" class="hidden" autocomplete="off" style="margin-bottom:12px;text-align:center">
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" id="confirmCancel">Cancel</button>
+      <button class="btn btn-danger" id="confirmOk">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="importOverlay" style="z-index:80">
+  <div class="sheet wide">
+    <h2>Import preview</h2>
+    <div id="importBody"></div>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" id="importCancel">Cancel</button>
+      <button class="btn btn-accent" id="importOk">Import</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="userOverlay" style="z-index:70;align-items:flex-start">
+  <div class="sheet wide" style="max-height:96vh">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <h2 id="userTitle" style="margin:0"></h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" id="uExpX">Export Excel</button>
+        <button class="btn btn-ghost btn-sm" id="uExpC">Export CSV</button>
+        <button class="btn btn-ghost btn-sm" id="uClose">Close</button>
+      </div>
+    </div>
+    <div class="stats" id="uStats"></div>
+    <div class="row" style="margin-bottom:10px">
+      <div><input type="search" id="uSearch" placeholder="Search product…"></div>
+      <div><select id="uStatus"><option value="all">All products</option><option value="uncounted">Not counted</option><option value="correct">Correct</option><option value="over">Overcount</option><option value="under">Undercount</option></select></div>
+    </div>
+    <div class="tablewrap"><table><thead><tr>
+      <th>Item details</th><th class="num">Expected</th><th class="num">Counted</th><th class="num">Remaining<br>(Exp − Cnt)</th><th class="num">Variance<br>(Cnt − Exp)</th><th>Status</th><th>Saved</th>
+    </tr></thead><tbody id="uRows"></tbody></table></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, deleteDoc, getDoc, getDocs, collection, collectionGroup, writeBatch } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+import { firebaseConfig, ADMIN_EMAIL } from "./firebase-config.js";
+import {
+  parseMasterSheets, csvToAoa, buildReport, compare, entryCount, productId, normName, round,
+  STATUS_LABEL, toCsv, download, esc, fmt, fmtVar
+} from "./stock-utils.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const masterRef = doc(db, 'masterStock', 'current');
+const $ = s => document.querySelector(s);
+
+/* ---------- State ---------- */
+let master = null;            // { items:[{id,name,expected}], fileName, updatedAt, ... } or null
+let usersMap = {};            // uid -> Map(productId -> {count, updatedAt, numItems, cartons, pieces})
+let userNames = {};           // uid -> display name
+let orphanCount = 0;          // saved counts whose product is no longer in the master list
+let report = null;            // current Overview/Products report
+let tab = 'overview';
+let pendingImport = null;
+
+function showMsg(el, text, type){ el.textContent = text; el.className = 'msg' + (type ? ' ' + type : ''); }
+const dashMsg = $('#dashMsg');
+const note = (t, type) => { showMsg(dashMsg, t, type); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+const shortUid = u => u.slice(0, 6) + '…' + u.slice(-4);
+const userLabel = u => userNames[u] ? `${userNames[u]} (${shortUid(u)})` : `Unnamed (${shortUid(u)})`;
+const when = t => t ? new Date(t).toLocaleString() : '—';
+const chip = s => `<span class="chip">${STATUS_LABEL[s]}</span>`;
+const friendly = err => (err && err.code === 'permission-denied') ? 'permission denied — are you signed in as the admin?' : ((err && (err.code || err.message)) || 'unknown error');
+
+/* ---------- Auth ---------- */
+onAuthStateChanged(auth, user => {
+  // Only a real (non-anonymous) account signed in with the admin email counts. A leftover anonymous
+  // session from the counter app must NOT show the dashboard. (The real lock is firestore.rules.)
+  if (user && !user.isAnonymous && user.email === ADMIN_EMAIL){
+    $('#loginWrap').classList.add('hidden'); $('#dashWrap').classList.remove('hidden');
+    refreshAll();
+  } else {
+    $('#loginWrap').classList.remove('hidden'); $('#dashWrap').classList.add('hidden');
+    ['userOverlay', 'importOverlay'].forEach(i => $('#' + i).classList.add('hidden'));
+    master = null; usersMap = {}; userNames = {};
+    if (user && user.isAnonymous) signOut(auth);
+  }
+});
+$('#loginBtn').addEventListener('click', async () => {
+  const pw = $('#pw').value;
+  if (!pw){ showMsg($('#loginMsg'), 'Enter the admin password.', 'error'); return; }
+  $('#loginMsg').classList.add('hidden');
+  try{ await signInWithEmailAndPassword(auth, ADMIN_EMAIL, pw); $('#pw').value = ''; }
+  catch(err){ console.error(err); showMsg($('#loginMsg'), 'Incorrect password, or admin account not set up yet.', 'error'); }
+});
+$('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('#loginBtn').click(); });
+
+/* ---------- Confirm dialog (optionally requires typing a word for dangerous actions) ---------- */
+function askConfirm(message, okLabel, title, typeWord){
+  return new Promise(resolve => {
+    const ov = $('#confirmOverlay'), ok = $('#confirmOk'), cancel = $('#confirmCancel'), inp = $('#confirmType');
+    $('#confirmTitle').textContent = title || 'Are you sure?'; $('#confirmMsg').textContent = message;
+    ok.textContent = okLabel || 'Delete';
+    inp.value = ''; inp.classList.toggle('hidden', !typeWord); if (typeWord) inp.placeholder = `Type ${typeWord} to confirm`;
+    ok.disabled = !!typeWord;
+    const onInput = () => { ok.disabled = inp.value.trim() !== typeWord; };
+    ov.classList.remove('hidden'); if (typeWord) setTimeout(() => inp.focus(), 50);
+    function cleanup(r){ ov.classList.add('hidden'); ok.removeEventListener('click', onOk); cancel.removeEventListener('click', onCancel); ov.removeEventListener('click', onOv); inp.removeEventListener('input', onInput); resolve(r); }
+    const onOk = () => cleanup(true), onCancel = () => cleanup(false), onOv = e => { if (e.target === ov) cleanup(false); };
+    ok.addEventListener('click', onOk); cancel.addEventListener('click', onCancel); ov.addEventListener('click', onOv); inp.addEventListener('input', onInput);
+  });
+}
+$('#logoutBtn').addEventListener('click', async () => { if (await askConfirm('You will need to sign in again to manage the stock data.', 'Log out', 'Log out?')) signOut(auth); });
+
+/* ---------- Tabs ---------- */
+function selectTab(t){
+  tab = t;
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === t));
+  ['overview', 'products', 'users', 'master'].forEach(p => $('#panel-' + p).classList.toggle('hidden', p !== t));
+  $('#viewBar').classList.toggle('hidden', t !== 'overview' && t !== 'products');
+}
+$('#tabs').addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) selectTab(t.dataset.tab); });
+
+/* ---------- Load everything ---------- */
+async function refreshAll(){
+  $('#refreshBtn').disabled = true;
+  try{
+    if (auth.currentUser) await auth.currentUser.getIdToken(true);
+    const part = (label, p) => p.catch(e => { e.part = label; throw e; });
+    const [mSnap, eSnap, uSnap] = await Promise.all([part('master list', getDoc(masterRef)), part('users\' entries', getDocs(collectionGroup(db, 'entries'))), part('user names', getDocs(collection(db, 'users')))]);
+    master = null;
+    if (mSnap.exists()){
+      const d = mSnap.data();
+      if (Array.isArray(d.items)) master = { ...d, items: d.items };
+      else master = { items: [], legacy: true, fileName: d.fileName, updatedAt: d.updatedAt };   // uploaded by the old version: re-upload needed
+    }
+    userNames = {}; uSnap.forEach(d => { if (d.data().name) userNames[d.id] = d.data().name; });
+    const ids = new Set((master ? master.items : []).map(i => i.id));
+    usersMap = {}; orphanCount = 0;
+    eSnap.forEach(d => {
+      const parent = d.ref.parent.parent; if (!parent || parent.parent.id !== 'users') return;
+      const x = d.data(), uid = parent.id, pid = x.productId || productId(x.details || '');
+      if (!x.productId && !x.details) return;
+      const m = (usersMap[uid] ||= new Map()), prev = m.get(pid), t = x.updatedAt || 0;
+      if (!prev || t >= prev.updatedAt) m.set(pid, { count: entryCount(x), updatedAt: t, numItems: x.numItems, cartons: x.cartons, pieces: x.pieces, name: x.details });
+      if (!ids.has(pid)) orphanCount++;
+    });
+    $('#loadedAt').textContent = 'Loaded ' + new Date().toLocaleTimeString();
+    renderAll();
+    if (master && master.legacy) note('The master list in the database was uploaded by an older version of the app. Go to "Master data" and upload your Excel file again.', 'error');
+  }catch(err){
+    console.error('Load error', err.code, err.message);
+    note('Could not load ' + (err.part || 'data') + ' (' + friendly(err) + ').' + (err.code === 'permission-denied' ? ' Publish the latest firestore.rules in the Firebase console (Firestore → Rules), then press Refresh.' : ''), 'error');
+  }finally{ $('#refreshBtn').disabled = false; }
+}
+$('#refreshBtn').addEventListener('click', refreshAll);
+
+/* ---------- Rendering ---------- */
+function renderAll(){ renderViewBar(); renderOverview(); renderProducts(); renderUsers(); renderMaster(); selectTab(tab); }
+function renderViewBar(){
+  const sel = $('#viewUser'), cur = sel.value || 'all';
+  const uids = Object.keys(usersMap);
+  sel.innerHTML = `<option value="all">All users — one reconciled count per product (no double counting)</option>` +
+    uids.map(u => `<option value="${esc(u)}">Only ${esc(userLabel(u))}</option>`).join('');
+  sel.value = uids.includes(cur) ? cur : 'all';
+  $('#basisWrap').classList.toggle('hidden', sel.value !== 'all');
+  $('#viewNote').textContent = sel.value === 'all' ? '' : 'Showing only this user\'s own counts and variances.';
+}
+function currentReport(){
+  const v = $('#viewUser').value;
+  return buildReport(master ? master.items : [], usersMap, { basis: $('#basis').value, uid: v === 'all' ? null : v });
+}
+const statCard = (k, v, cls = '') => `<div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+function renderOverview(){
+  if (!master || !master.items.length){ $('#statsGrid').innerHTML = '<div class="msg">No master stock list yet — upload one under "Master data".</div>'; report = { rows: [], totals: {} }; return; }
+  report = currentReport(); const T = report.totals;
+  const usersN = Object.keys(usersMap).filter(u => usersMap[u].size).length;
+  $('#statsGrid').innerHTML = [
+    statCard('Products in master list', fmt(T.products)),
+    statCard('Products counted (by at least one user)', fmt(T.counted), 'ok'),
+    statCard('Products not yet counted', fmt(T.uncounted)),
+    statCard('Total expected stock (all products)', fmt(T.expectedAll)),
+    statCard('Total physical quantity counted', fmt(T.physical)),
+    statCard('Expected stock of counted products', fmt(T.expectedCounted)),
+    statCard('Total overcount variance', fmtVar(T.over), 'over'),
+    statCard('Total shortage variance', fmtVar(T.short), 'under'),
+    statCard('Net variance (over + shortage)', fmtVar(T.net)),
+    statCard('Correct / Over / Under', `${fmt(T.correct)} / ${fmt(T.overCount)} / ${fmt(T.underCount)}`),
+    statCard('Products where users disagree', fmt(T.conflicts), T.conflicts ? 'over' : ''),
+    statCard('Users who have submitted entries', fmt(usersN)),
+    orphanCount ? statCard('Saved counts for products no longer in master', fmt(orphanCount)) : ''
+  ].join('');
+}
+
+const PAGE = 200; let pList = [], pShown = 0;
+function pRowHtml(r){
+  const who = r.counts.map(c => `${esc(userNames[c.uid] || shortUid(c.uid))}: <b>${fmt(c.count)}</b>`).join(' · ');
+  return `<tr class="st-${r.status}"><td>${esc(r.name)}</td><td class="num mono">${fmt(r.expected)}</td>
+    <td class="num mono">${fmt(r.count)}</td><td class="num var">${fmtVar(r.variance)}</td><td>${chip(r.status)}</td>
+    <td class="small">${who || '—'}${r.conflict ? ' <span class="conflict">⚠ counts differ</span>' : ''}</td></tr>`;
+}
+function renderProducts(){
+  if (!report) return;
+  const q = normName($('#pSearch').value), st = $('#pStatus').value;
+  pList = report.rows.filter(r =>
+    (!q || normName(r.name).includes(q)) &&
+    (st === 'all' || (st === 'issues' ? (r.status === 'over' || r.status === 'under') : st === 'conflict' ? r.conflict : r.status === st)));
+  $('#pBody').innerHTML = ''; pShown = 0; moreP();
+  $('#pCount').textContent = `${fmt(pList.length)} of ${fmt(report.rows.length)} products`;
+}
+function moreP(){ const s = pList.slice(pShown, pShown + PAGE); if (!s.length) return; $('#pBody').insertAdjacentHTML('beforeend', s.map(pRowHtml).join('')); pShown += s.length; }
+$('#pBody').closest('.tablewrap').addEventListener('scroll', e => { const w = e.currentTarget; if (pShown < pList.length && w.scrollTop + w.clientHeight >= w.scrollHeight - 600) moreP(); });
+['pSearch', 'pStatus'].forEach(id => $('#' + id).addEventListener('input', renderProducts));
+$('#viewUser').addEventListener('change', () => { renderViewBar(); renderOverview(); renderProducts(); });
+$('#basis').addEventListener('change', () => { renderOverview(); renderProducts(); });
+
+function userStats(uid){
+  const r = buildReport(master ? master.items : [], usersMap, { uid });
+  const last = [...usersMap[uid].values()].reduce((m, e) => Math.max(m, e.updatedAt || 0), 0);
+  return { ...r, last };
+}
+function renderUsers(){
+  const uids = Object.keys(usersMap).filter(u => usersMap[u].size);
+  if (!uids.length){ $('#uBody').innerHTML = '<tr><td colspan="10" class="small" style="padding:14px">No user has saved any counts yet.</td></tr>'; return; }
+  const rows = uids.map(u => ({ u, s: userStats(u) })).sort((a, b) => b.s.last - a.s.last);
+  $('#uBody').innerHTML = rows.map(({ u, s }) => { const T = s.totals; return `<tr>
+    <td>${esc(userNames[u] || 'Unnamed')}<div class="small">${esc(shortUid(u))}</div></td>
+    <td class="num">${fmt(T.counted)}</td><td class="num">${fmt(T.uncounted)}</td><td class="num">${fmt(T.correct)}</td>
+    <td class="num">${fmt(T.overCount)}</td><td class="num">${fmt(T.underCount)}</td>
+    <td class="num mono">${fmt(T.physical)}</td><td class="num mono">${fmtVar(T.net)}</td><td class="small">${esc(when(s.last))}</td>
+    <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-view="${esc(u)}">View report</button>
+      <button class="btn btn-ghost btn-sm" data-xl="${esc(u)}">Excel</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:var(--danger)" data-del="${esc(u)}">Delete entries</button></td></tr>`; }).join('');
+}
+$('#uBody').addEventListener('click', e => {
+  const v = e.target.closest('[data-view]'), x = e.target.closest('[data-xl]'), d = e.target.closest('[data-del]');
+  if (v) openUser(v.dataset.view); if (x) exportUser(x.dataset.xl, 'xlsx'); if (d) deleteUserEntries(d.dataset.del);
+});
+
+/* ---------- Master tab ---------- */
+let mList = [], mShown = 0;
+function renderMaster(){
+  const card = $('#masterCard');
+  if (!master || !master.items.length){ card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  $('#masterInfo').innerHTML = `<b>${fmt(master.items.length)}</b> products · total expected <b>${fmt(master.items.reduce((a, i) => a + i.expected, 0))}</b>` +
+    (master.fileName ? ` · from <b>${esc(master.fileName)}</b>` : '') + (master.updatedAt ? ` · uploaded ${esc(when(master.updatedAt))}` : '');
+  filterMaster();
+}
+function filterMaster(){
+  const q = normName($('#mSearch').value);
+  mList = master.items.filter(i => !q || normName(i.name).includes(q));
+  $('#mBody').innerHTML = ''; mShown = 0; moreM();
+}
+function moreM(){ const s = mList.slice(mShown, mShown + PAGE); if (!s.length) return; $('#mBody').insertAdjacentHTML('beforeend', s.map(i => `<tr><td>${esc(i.name)}</td><td class="num mono">${fmt(i.expected)}</td></tr>`).join('')); mShown += s.length; }
+$('#mSearch').addEventListener('input', filterMaster);
+$('#mBody').closest('.tablewrap').addEventListener('scroll', e => { const w = e.currentTarget; if (mShown < mList.length && w.scrollTop + w.clientHeight >= w.scrollHeight - 600) moreM(); });
+
+/* ---------- Upload: parse -> validate -> PREVIEW -> confirm -> write (all-or-nothing) ---------- */
+async function readSheets(file){
+  const name = file.name.toLowerCase();
+  if (typeof XLSX === 'undefined'){
+    if (!name.endsWith('.csv')) throw new Error('The Excel library did not load — check your connection, or upload a CSV instead.');
+    return [{ name: 'CSV', aoa: csvToAoa(await file.text()) }];
+  }
+  const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellFormula: false, cellHTML: false, cellDates: false });
+  return wb.SheetNames.map(n => ({ name: n, aoa: XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: '', raw: true }) }));
+}
+$('#uploadBtn').addEventListener('click', async () => {
+  const file = $('#fileInput').files[0];
+  if (!file){ note('Choose a CSV or Excel file first.', 'error'); return; }
+  $('#uploadBtn').disabled = true;
+  try{
+    const res = parseMasterSheets(await readSheets(file));
+    pendingImport = { res, fileName: file.name };
+    showImportPreview();
+  }catch(err){ console.error(err); note('Could not read that file: ' + (err.message || 'unknown error'), 'error'); }
+  finally{ $('#uploadBtn').disabled = false; }
+});
+function showImportPreview(){
+  const { res, fileName } = pendingImport, cur = master && master.items ? master.items.length : 0;
+  const list = (arr, cls) => arr.length ? `<div class="list ${cls || ''}">${arr.slice(0, 40).map(x => `<div>${esc(x)}</div>`).join('')}${arr.length > 40 ? `<div>…and ${arr.length - 40} more</div>` : ''}</div>` : '';
+  let h = `<div class="note" style="margin-top:0">File: <b>${esc(fileName)}</b>${res.sheetName ? ` · sheet <b>${esc(res.sheetName)}</b>` : ''}</div>`;
+  if (res.headerRow){
+    h += `<div class="note">Header row found at <b>row ${res.headerRow}</b>: product name = column <b>${res.nameCol}</b> ("${esc(res.nameHeader)}"), expected quantity = column <b>${res.qtyCol}</b> ("${esc(res.qtyHeader)}"). TOTAL / DIFF columns are ignored.</div>`;
+  }
+  if (res.errors.length){
+    h += `<div class="msg error"><b>${res.errors.length} problem(s) must be fixed before importing.</b> Your current master data has NOT been changed.</div>${list(res.errors)}`;
+  } else {
+    h += `<div class="stats"><div class="stat ok"><div class="k">Products to import</div><div class="v">${fmt(res.items.length)}</div></div>
+      <div class="stat"><div class="k">Total expected stock</div><div class="v">${fmt(res.totalExpected)}</div></div>
+      <div class="stat"><div class="k">Blank rows skipped</div><div class="v">${fmt(res.skippedBlank)}</div></div>
+      <div class="stat"><div class="k">Current master list</div><div class="v">${fmt(cur)}</div></div></div>`;
+    if (res.warnings.length) h += `<div class="msg" style="border-color:var(--over)"><span class="warn">${res.warnings.length} warning(s)</span> — these will still be imported:</div>${list(res.warnings)}`;
+    const sample = res.items.slice(0, 6).concat(res.items.length > 9 ? res.items.slice(-3) : []);
+    h += `<div class="tablewrap" style="max-height:200px"><table><thead><tr><th>Item details</th><th class="num">Expected (System)</th></tr></thead><tbody>${sample.map(i => `<tr><td>${esc(i.name)}</td><td class="num mono">${fmt(i.expected)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="note">First and last rows shown. Importing <b>replaces</b> the current master list for all users. Users' saved counts are kept and re-matched by product name.</div>`;
+  }
+  $('#importBody').innerHTML = h;
+  $('#importOk').disabled = !res.ok; $('#importOk').textContent = res.ok ? `Import ${fmt(res.items.length)} products` : 'Cannot import';
+  $('#importOverlay').classList.remove('hidden');
+}
+$('#importCancel').addEventListener('click', () => { $('#importOverlay').classList.add('hidden'); pendingImport = null; });
+$('#importOk').addEventListener('click', async () => {
+  if (!pendingImport || !pendingImport.res.ok) return;
+  const { res, fileName } = pendingImport;
+  $('#importOk').disabled = true;
+  try{
+    const items = res.items.map(({ id, name, expected }) => ({ id, name, expected }));
+    // ONE document write = atomic: either the whole new list is stored or the old one stays untouched.
+    await setDoc(masterRef, { items, count: items.length, totalExpected: res.totalExpected, fileName, sheetName: res.sheetName || '', headerRow: res.headerRow, updatedAt: Date.now(), schema: 2 });
+    $('#importOverlay').classList.add('hidden'); $('#fileInput').value = ''; pendingImport = null;
+    await refreshAll();
+    note(`Import successful: ${fmt(items.length)} products imported from ${fileName}. All users now see this list.`, 'ok');
+  }catch(err){
+    console.error(err);
+    $('#importOk').disabled = false;
+    $('#importBody').insertAdjacentHTML('afterbegin', `<div class="msg error">Import FAILED (${esc(friendly(err))}). The previous master list was not changed.</div>`);
+  }
+});
+$('#deleteBtn').addEventListener('click', async () => {
+  if (!(await askConfirm('Normal users will no longer see any products until you upload a new list. Their saved counts are kept.', 'Delete', 'Delete the master stock data?'))) return;
+  try{ await deleteDoc(masterRef); await refreshAll(); note('Master data deleted.', 'ok'); }
+  catch(err){ console.error(err); note('Delete failed (' + friendly(err) + ').', 'error'); }
+});
+
+/* ---------- Per-user report overlay ---------- */
+let openUid = null;
+function openUser(uid){ openUid = uid; $('#uSearch').value = ''; $('#uStatus').value = 'all'; $('#userOverlay').classList.remove('hidden'); renderUser(); }
+function renderUser(){
+  const uid = openUid, s = userStats(uid), T = s.totals;
+  $('#userTitle').textContent = `${userLabel(uid)} — last saved ${when(s.last)}`;
+  $('#uStats').innerHTML = [statCard('Counted', `${fmt(T.counted)} / ${fmt(T.products)}`, 'ok'), statCard('Not counted', fmt(T.uncounted)), statCard('Total counted', fmt(T.physical)),
+    statCard('Overcount', fmtVar(T.over), 'over'), statCard('Shortage', fmtVar(T.short), 'under'), statCard('Correct', fmt(T.correct))].join('');
+  const q = normName($('#uSearch').value), st = $('#uStatus').value;
+  const matches = s.rows.filter(r => (!q || normName(r.name).includes(q)) && (st === 'all' || r.status === st));
+  const rows = matches.slice(0, 600);
+  $('#uRows').innerHTML = rows.map(r => `<tr class="st-${r.status}"><td>${esc(r.name)}</td><td class="num mono">${fmt(r.expected)}</td><td class="num mono">${fmt(r.count)}</td>
+    <td class="num mono">${fmt(r.remaining)}</td><td class="num var">${fmtVar(r.variance)}</td><td>${chip(r.status)}</td><td class="small">${r.counts[0] ? esc(when(r.counts[0].updatedAt)) : '—'}</td></tr>`).join('')
+    + (matches.length > 600 ? `<tr><td colspan="7" class="small">Showing the first 600 of ${fmt(matches.length)} matches — narrow the search, or export for the full report.</td></tr>` : '');
+}
+['uSearch', 'uStatus'].forEach(id => $('#' + id).addEventListener('input', renderUser));
+$('#uClose').addEventListener('click', () => { $('#userOverlay').classList.add('hidden'); openUid = null; });
+$('#uExpX').addEventListener('click', () => exportUser(openUid, 'xlsx'));
+$('#uExpC').addEventListener('click', () => exportUser(openUid, 'csv'));
+
+/* ---------- Exports ---------- */
+const stamp = () => new Date().toISOString().slice(0, 10);
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+function sheet(aoa, widths){ const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = widths.map(w => ({ wch: w })); return ws; }
+async function saveWorkbook(wb, name){
+  if (await download(name, new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: XLSX_MIME }), XLSX_MIME)) note('Exported ' + name, 'ok');
+}
+const needXlsx = () => { if (typeof XLSX === 'undefined'){ note('Excel export needs the Excel library (check your connection) — try CSV.', 'error'); return true; } return false; };
+const PROD_HEAD = ['Item Details', 'Expected (System)', 'Counted', 'Remaining (Expected - Counted)', 'Variance (Counted - Expected)', 'Status', 'Users who counted', 'Counts differ between users'];
+const prodRow = r => [r.name, r.expected, r.count == null ? '' : r.count, r.remaining == null ? '' : r.remaining, r.variance == null ? '' : r.variance, STATUS_LABEL[r.status],
+  r.counts.map(c => `${userNames[c.uid] || shortUid(c.uid)}: ${c.count}`).join('; '), r.conflict ? 'YES' : ''];
+const BASIS = { latest: 'most recent count', highest: 'highest count', lowest: 'lowest count' };
+
+$('#expProdC').addEventListener('click', async () => { if (pList.length && await download(`stock-products-${stamp()}.csv`, toCsv(PROD_HEAD, pList.map(prodRow)), 'text/csv;charset=utf-8;')) note('CSV exported', 'ok'); });
+$('#expOverallC').addEventListener('click', async () => { if (report && report.rows.length && await download(`stock-overall-${stamp()}.csv`, toCsv(PROD_HEAD, report.rows.map(prodRow)), 'text/csv;charset=utf-8;')) note('CSV exported', 'ok'); });
+$('#expOverallX').addEventListener('click', async () => {
+  if (!master || !master.items.length){ note('No master list to report on yet.', 'error'); return; }
+  if (needXlsx()) return;
+  const full = buildReport(master.items, usersMap, { basis: $('#basis').value }), T = full.totals, wb = XLSX.utils.book_new();
+  const sum = [['Ernievero Stock Take — Overall report'], ['Generated', new Date().toLocaleString()], ['Basis when users overlap', BASIS[$('#basis').value]], [],
+    ['Products in master list', T.products], ['Products counted (by at least one user)', T.counted], ['Products not yet counted', T.uncounted],
+    ['Total expected stock (all products)', T.expectedAll], ['Expected stock of counted products', T.expectedCounted], ['Total physical quantity counted', T.physical],
+    ['Total overcount variance', T.over], ['Total shortage variance', T.short], ['Net variance', T.net],
+    ['Correct products', T.correct], ['Overcount products', T.overCount], ['Undercount products', T.underCount], ['Products where users disagree', T.conflicts],
+    ['Users who have submitted entries', Object.keys(usersMap).filter(u => usersMap[u].size).length]];
+  XLSX.utils.book_append_sheet(wb, sheet(sum, [42, 24]), 'Summary');
+  XLSX.utils.book_append_sheet(wb, sheet([PROD_HEAD, ...full.rows.map(prodRow)], [44, 16, 12, 26, 26, 14, 40, 18]), 'Products');
+  const long = [['Item Details', 'Expected (System)', 'User', 'User ID', 'Physical Count', 'Variance (Counted - Expected)', 'Status', 'Last saved']];
+  full.rows.forEach(r => r.counts.forEach(c => { const x = compare(r.expected, c.count); long.push([r.name, r.expected, userNames[c.uid] || 'Unnamed', c.uid, c.count, x.variance, STATUS_LABEL[x.status], when(c.updatedAt)]); }));
+  XLSX.utils.book_append_sheet(wb, sheet(long, [44, 16, 20, 30, 14, 26, 14, 22]), 'Counts by user');
+  XLSX.utils.book_append_sheet(wb, sheet([['Item Details', 'Expected (System)'], ...full.rows.filter(r => r.status === 'uncounted').map(r => [r.name, r.expected])], [44, 16]), 'Not counted');
+  const us = [['User', 'User ID', 'Products counted', 'Not counted', 'Correct', 'Overcount', 'Undercount', 'Total counted', 'Overcount variance', 'Shortage variance', 'Net variance', 'Last saved']];
+  Object.keys(usersMap).filter(u => usersMap[u].size).forEach(u => { const s = userStats(u), t = s.totals; us.push([userNames[u] || 'Unnamed', u, t.counted, t.uncounted, t.correct, t.overCount, t.underCount, t.physical, t.over, t.short, t.net, when(s.last)]); });
+  XLSX.utils.book_append_sheet(wb, sheet(us, [20, 30, 12, 12, 10, 10, 10, 14, 16, 16, 12, 22]), 'Users');
+  await saveWorkbook(wb, `stock-overall-report-${stamp()}.xlsx`);
+});
+const USER_HEAD = ['Item Details', 'Expected (System)', 'Number of Items', 'Cartons', 'Pieces', 'Physical Count', 'Remaining (Expected - Counted)', 'Variance (Counted - Expected)', 'Status', 'Last saved'];
+function userRows(uid){
+  const s = userStats(uid);
+  return { s, rows: s.rows.map(r => { const c = r.counts[0]; return [r.name, r.expected, c ? c.numItems : '', c ? c.cartons : '', c ? c.pieces : '', r.count == null ? '' : r.count,
+    r.remaining == null ? '' : r.remaining, r.variance == null ? '' : r.variance, STATUS_LABEL[r.status], c ? when(c.updatedAt) : '']; }) };
+}
+async function exportUser(uid, fmtType){
+  if (!uid || !master) return;
+  const { s, rows } = userRows(uid), label = (userNames[uid] || shortUid(uid)).replace(/[^\w-]+/g, '_');
+  if (fmtType === 'csv'){ if (await download(`stock-${label}-${stamp()}.csv`, toCsv(USER_HEAD, rows), 'text/csv;charset=utf-8;')) note('CSV exported', 'ok'); return; }
+  if (needXlsx()) return;
+  const T = s.totals, wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet([[`Stock take — ${userLabel(uid)}`], ['Last saved', when(s.last)], [], ['Products counted', T.counted], ['Not counted', T.uncounted], ['Total counted', T.physical],
+    ['Overcount variance', T.over], ['Shortage variance', T.short], ['Net variance', T.net]], [34, 28]), 'Summary');
+  XLSX.utils.book_append_sheet(wb, sheet([USER_HEAD, ...rows], [44, 16, 14, 10, 10, 14, 28, 26, 14, 22]), 'Report');
+  await saveWorkbook(wb, `stock-${label}-${stamp()}.xlsx`);
+}
+
+/* ---------- Reset / delete entries (always behind an explicit confirmation) ---------- */
+async function deleteEntryDocs(refs){
+  for (let k = 0; k < refs.length; k += 400){ const b = writeBatch(db); refs.slice(k, k + 400).forEach(r => b.delete(r)); await b.commit(); }
+}
+async function entryRefsFor(uid){
+  const snap = await getDocs(collection(db, 'users', uid, 'entries'));
+  return snap.docs.map(d => d.ref);
+}
+async function deleteUserEntries(uid){
+  const n = usersMap[uid] ? usersMap[uid].size : 0;
+  if (!(await askConfirm(`Delete all saved counts of ${userLabel(uid)}?\nThis cannot be undone.`, 'Delete entries', 'Delete entries?'))) return;
+  try{ await deleteEntryDocs(await entryRefsFor(uid)); await refreshAll(); note(`Deleted ${userLabel(uid)}'s entries.`, 'ok'); }
+  catch(err){ console.error(err); note('Delete failed (' + friendly(err) + '). Some entries may remain — refresh to check.', 'error'); }
+}
+$('#resetAllBtn').addEventListener('click', async () => {
+  const uids = Object.keys(usersMap); if (!uids.length){ note('There are no entries to reset.'); return; }
+  if (!(await askConfirm(`This permanently deletes EVERY saved count of ALL ${uids.length} user(s). Export the report first if you need it.`, 'Reset everything', 'Reset all stock-take entries?', 'RESET'))) return;
+  try{ for (const u of uids) await deleteEntryDocs(await entryRefsFor(u)); await refreshAll(); note('All stock-take entries were reset.', 'ok'); }
+  catch(err){ console.error(err); note('Reset failed (' + friendly(err) + '). Some entries may remain — refresh to check.', 'error'); }
+});
+
+selectTab('overview');
+</script>
+</body>
+</html>
